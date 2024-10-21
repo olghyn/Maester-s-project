@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Oct 11 13:45:19 2024
+Created on Mon Oct 14 09:24:00 2024
 
 @author: olga
 """
@@ -13,15 +13,10 @@ import matplotlib.pyplot as plt
 import pagn.constants as ct
 plt.rcParams['figure.dpi'] = 150
 from IPython.display import clear_output
-
-#%%
-#MIGRATION TORQUES
-
 from scipy.interpolate import UnivariateSpline
 from pagn.opacities import electron_scattering_opacity
 import matplotlib.lines as mlines
-from matplotlib.legend_handler import HandlerLine2D, HandlerTuple
-
+#%%
 def gamma_0(q, hr, Sigma, r, Omega):
     """
     Method to find the normalization torque
@@ -45,7 +40,7 @@ def gamma_0(q, hr, Sigma, r, Omega):
         Float or array representing the single-arm migration torque on the migrator in kg m^2/ s^2.
 
     """
-    gamma_0 = q*q*Sigma*r*r*r*r*Omega*Omega/(hr*hr)     
+    gamma_0 = q*q*Sigma*r*r*r*r*Omega*Omega/(hr*hr)
     return gamma_0
 
 
@@ -307,44 +302,21 @@ def gamma_thermal(gamma, obj, q):
     decay = 1 - np.exp(-lam*obj.tauV/obj.h)
     return g_thermal*decay
 
-def Kappa(q, hr, alpha):
-    
-    """
-    Method to find the correction for type II torque
-
-    Parameters
-    ----------
-    q: float/array
-        Float or array representing the mass ratio between the migrator and the central BH.
-    hr: float/array
-        Float or array representing the disk height to distance from central BH ratio.
-    alpha: Shakura-Sunyaev viscosity constant
-
-    Returns
-    -------
-    K: float/array
-        Float or array representing correction that takes into account the lower but non-zero density of gas in the gap.
-
-    """
-    
-    K = q*q/(alpha*hr*hr*hr*hr*hr)
-    
-    return K/25
-
-
 #%%
+
+from IPython.display import clear_output
+
 disk_name = ['sirko', 'thompson']
 d_counter = 0
 
-f, axes = plt.subplots(5, 2, figsize=(12, 12), sharex=True, sharey='row', gridspec_kw=dict(hspace=0, wspace =0, height_ratios = (2, 2, 2, 2, 1.5)), tight_layout=True)
+f, axes = plt.subplots(4, 2, figsize=(10, 10), sharex=True, sharey='row', gridspec_kw=dict(hspace=0, wspace =0, height_ratios = (2, 2, 2, 1.2)), tight_layout=True)
 for axx in axes.flatten():
     axx.set_yscale('log')
     axx.set_xscale('log')
 
 for dname in disk_name:
-    Mbh = 1e7
-    q = 1e-6
-    q_II = 1e-4
+    Mbh = 1e6
+    q = 5e-6
 
     #generate the disk values for both AGN disk models using pagn
     if dname == 'thompson':
@@ -353,48 +325,27 @@ for dname in disk_name:
         sigma = 200 * (Mbh / 1.3e8) ** (1 / 4.24)
         Mdot_out = 1.5e-2
         obj = Thompson.ThompsonAGN(Mbh=Mbh*ct.MSun, Rout = rout, Mdot_out=Mdot_out*ct.MSun/ct.yr)
-        print('tho:', Mbh)
         clear_output(obj.solve_disk(N=1e4))
     else:
         le = 0.5
         alpha = 0.01
         obj = Sirko.SirkoAGN(Mbh=Mbh*ct.MSun, le=le, alpha=alpha, b=0)
-        print('sk:', Mbh)
         clear_output(obj.solve_disk(N=1e4))
 
     Gamma_0 = gamma_0(q, obj.h / obj.R, 2 * obj.rho * obj.h, obj.R, obj.Omega)
 
-    #Grishin et al 2023 equations q=1e-6
+    #Grishin et al 2023 equations
     dSig = dSigmadR(obj)
     dT = dTdR(obj)
     cI_p10 = CI_p10(dSig, dT)
     Gamma_I_p10 = cI_p10*Gamma_0
     gamma = 5/3
-    print(np.mean(cI_p10))
 
     cI_jm_tot = CI_jm17_tot(dSig, dT, gamma, obj)
     Gamma_I_jm_tot = cI_jm_tot*Gamma_0
     Gamma_therm = gamma_thermal(gamma, obj, q)*Gamma_0*obj.R/obj.h
-    print(np.mean(cI_jm_tot))
-    
-    Gamma_tot_I = Gamma_therm + Gamma_I_jm_tot
-    
-    #Gilbaum eq but for type II, so q=1e-4
-    Gamma_0_II = gamma_0(q_II, obj.h / obj.R, 2 * obj.rho * obj.h, obj.R, obj.Omega)
 
-    Gamma_I_p10_II = cI_p10*Gamma_0_II
-    gamma = 5/3
-
-    Gamma_I_jm_tot_II = cI_jm_tot*Gamma_0_II
-    Gamma_therm_II = gamma_thermal(gamma, obj, q_II)*Gamma_0_II*obj.R/obj.h #not necessary
-    
-    c_II_gil = -1
-    kappa = Kappa(q_II, obj.h / obj.R, alpha )
-    const_gil = c_II_gil/cI_jm_tot*1/(1 + kappa)
-    Gamma_II_gil = const_gil*Gamma_I_jm_tot_II 
-
-    
-    Gamma_tot_II = Gamma_II_gil
+    Gamma_tot = Gamma_therm + Gamma_I_jm_tot
 
     #-----Plotting-----#
 
@@ -402,11 +353,11 @@ for dname in disk_name:
     linestyles = ['-', '--', '-.', ':']
     ax = axes[:, d_counter]
     if hasattr(obj, 'alpha'):
-        ax[0].text(10 ** 1.2, 10 ** 43,  r'${\rm Sirko \, and \, Goodman, M = 'f"{Mbh:.1e}"'}$' )
+        ax[0].text(10 ** 1.2, 10 ** 40,  r'${\rm Sirko \, and \, Goodman}$' )
     else:
-        ax[0].text(10 ** 1.2, 10 ** 43,  r'${\rm Thompson, M = 'f"{Mbh:.1e}"'}$')
+        ax[0].text(10 ** 1.2, 10 ** 40,  r'${\rm Thompson}$')
 
-    for iGamma, Gamma in enumerate([Gamma_I_jm_tot, Gamma_therm, Gamma_tot_I, Gamma_tot_II]):
+    for iGamma, Gamma in enumerate([Gamma_I_jm_tot, Gamma_therm, Gamma_tot]):
         maskg = Gamma >= 0
         indices = np.nonzero(maskg[1:] != maskg[:-1])[0] + 1
         Gammas = np.split(Gamma, indices)
@@ -438,7 +389,7 @@ for dname in disk_name:
 
                 else:
                     ax[iGamma].plot(Rs2[iseg2] / obj.Rs, abs(seg2), c='C0', zorder = 1, alpha = 0.4)
-    ax[4].plot(obj.R/obj.Rs, 2*obj.h*obj.rho*ct.SI_to_gcm2, label = r"$\Sigma_{\rm g} [{\rm g cm}^{-2}]$")
+    ax[3].plot(obj.R/obj.Rs, 2*obj.h*obj.rho*ct.SI_to_gcm2, label = r"$\Sigma_{\rm g} [{\rm g cm}^{-2}]$")
     d_counter += 1
 
 pos_line = mlines.Line2D([], [], color='C0', marker='s',
@@ -453,7 +404,7 @@ pos_line2 = mlines.Line2D([], [], color='C0', marker='s', alpha = 0.4,
 neg_line2 = mlines.Line2D([], [], color='C1', marker='s', alpha = 0.4,
                          markersize=0,)
 
-
+from matplotlib.legend_handler import HandlerLine2D, HandlerTuple
 axes[0,1].legend(handles=[(pos_line, neg_line), (pos_line2, neg_line2,) ],
                  labels=[r'${\rm Jim \acute{e} nez \, and \, Masset \, (2017)}$', r'$\rm Paardekooper \, et \, al. \, (2010)$',],
                  handler_map = {tuple: HandlerTuple(ndivide = None, pad = 0.)},
@@ -461,23 +412,22 @@ axes[0,1].legend(handles=[(pos_line, neg_line), (pos_line2, neg_line2,) ],
 
 axes[0,0].set_ylabel(r'${\Gamma_{\rm I} \, {\rm [g \, cm}^{2}{\rm s}^{-2}{\rm ]} }$')
 axes[1,0].set_ylabel(r'${\Gamma_{\rm therm} \, {\rm [g \, cm}^{2}{\rm s}^{-2}{\rm ]} }$')
-axes[2,0].set_ylabel(r'${\Gamma_{\rm totI} \, {\rm [g \, cm}^{2}{\rm s}^{-2}{\rm ]} }$')
-axes[3, 0].set_ylabel(r'${\Gamma_{\rm II} \, {\rm [g \, cm}^{2}{\rm s}^{-2}{\rm ]} }$')
-axes[4, 0].set_ylabel(r'$\Sigma_{\rm g} [{\rm g \, cm}^{-2}]$')
+axes[2,0].set_ylabel(r'${\Gamma_{\rm tot} \, {\rm [g \, cm}^{2}{\rm s}^{-2}{\rm ]} }$')
+axes[3, 0].set_ylabel(r'$\Sigma_{\rm g} [{\rm g \, cm}^{-2}]$')
 
 x_label = r"$r \, [R_{\rm s}]$"
-axes[4, 0].set_xlabel(x_label)
-axes[4, 1].set_xlabel(x_label)
+axes[3, 0].set_xlabel(x_label)
+axes[3, 1].set_xlabel(x_label)
 
-axes[0, 0].set_ylim((1e25, 1e46))
+axes[0, 0].set_ylim((1e25, 1e42))
 
-axes[1, 0].set_ylim((5e24, 1e44))
 
-axes[2, 0].set_ylim((1e25, 1e44))
+axes[1, 0].set_ylim((5e24, 1e42))
 
-axes[3, 0].set_ylim((1e25, 1e44))
+axes[2, 0].set_ylim((1e25, 1e42))
 
-axes[4, 0].set_ylim((1e0, 1e7))
+
+axes[3, 0].set_ylim((1e1, 1e7))
 
 for axx in axes.flatten():
     axx.yaxis.set_ticks_position('both')
